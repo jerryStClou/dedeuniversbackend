@@ -62,17 +62,31 @@ public class ProductSizeService {
     }
 
     public void remove(Integer id) {
+       List<ProductOption> productOptions = productOptionRepository.findBySize_Id(id);
+
+        for (ProductOption productOption : productOptions) {
+            productOption.setSize(null);
+        }
+
         productSizeRepository.deleteById(id);
     }
 
 
 
-    public ProductSize addProductSize(ProductSize productSize, Integer idProductOption){
-        ProductOption productOption = productOptionRepository.findById(idProductOption).get();
+    public ProductSize addProductSize(ProductSize productSize, Integer idProduct){
+       // ProductOption productOption = productOptionRepository.findById(idProductOption).get();
         ProductSize productSize1 = productSizeRepository.save(productSize);
-        productOption.setSize(productSize1);
-        productOptionRepository.save(productOption);
+        List<ProductOption> productOptions = productOptionRepository.findByProductId(idProduct);
+        for (ProductOption productOption:productOptions){
+            productOption.setSize(productSize1);
+            productOptionRepository.save(productOption);
+        }
+
         return productSize1;
+    }
+
+    public List<ProductSize> getAllSizeByProductId(Integer idProduct){
+        return productOptionRepository.findSizesByProductId(idProduct);
     }
 
 

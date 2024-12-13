@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.Random;
 
 import dedeUnivers.dedeUnivers.entities.Role;
+import dedeUnivers.dedeUnivers.enums.RoleType;
 import dedeUnivers.dedeUnivers.repositories.RoleRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.SimpleMailMessage;
@@ -22,9 +23,13 @@ import dedeUnivers.dedeUnivers.entities.Validation;
 import dedeUnivers.dedeUnivers.projections.ValidationCodeProjection;
 import dedeUnivers.dedeUnivers.repositories.UserRepository;
 import dedeUnivers.dedeUnivers.repositories.ValidationRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
 public class UserService implements UserDetailsService {
+
+    private static final Logger log = LoggerFactory.getLogger(UserService.class);
 
     @Autowired
     UserRepository userRepository;
@@ -86,43 +91,117 @@ public class UserService implements UserDetailsService {
     public Optional<Validation> getValidationByCode (String ValidationCode){
         return validationRepository.findByValidationCode(ValidationCode);
     }
+//
+//    public User register(UserRegistrationDto registrationDto) {
+//        // Vérifier si l'email est déjà validé
+//        Optional<Validation> vOptional = validationRepository.findByEmail(registrationDto.getEmail());
+//        if (vOptional.isEmpty()) {
+//            throw new IllegalArgumentException("Aucune validation trouvée pour cet email");
+//        }
+//
+//        Validation validation = vOptional.get();
+//
+//        if (!validation.getActivation()) {
+//            throw new IllegalArgumentException("L'activation n'est pas encore effectuée");
+//        }
+//
+//
+//        // Vérifier que les mots de passe sont identiques
+//        if (!registrationDto.getPassword().equals(registrationDto.getConfirmPassword()))
+//        {
+//            throw new IllegalArgumentException("Les mots de passe ne correspondent pas");
+//        }
+//
+//
+//
+//        // Créer un utilisateur
+//        User user = new User();
+//        user.setLastname(registrationDto.getLastname());
+//        user.setFirstname(registrationDto.getFirstname());
+//        user.setPseudo(registrationDto.getPseudo());
+//        user.setImageProfil(registrationDto.getImageProfil());
+//        user.setEmail(registrationDto.getEmail());
+//        // Encoder le mot de passe
+//        String passwordEncrypt = passwordEncoder.encode(registrationDto.getPassword());
+//        user.setPassword(passwordEncrypt);
+//
+//        user.setActif(true);
+//        user.setLoyaltyPoints(0);
+//
+//        // Récupérer le rôle
+//        Optional<Role> roleOptional = roleRepository.findById(2);
+//        //Optional<Role> roleOptional = roleRepository.findByRoleType(RoleType.ADMIN);
+//        if (roleOptional.isEmpty()) {
+//            throw new IllegalArgumentException("Rôle non trouvé pour l'ID spécifié");
+//        }
+//        user.setRole(roleOptional.get());
+//
+//        // Sauvegarder l'utilisateur
+//
+//        validationRepository.save(validation);
+//        user = userRepository.save(user);
+//        validation.setUser(user);
+//        validationRepository.save(validation);
+//       // return "L'utilisateur a bien été enregistrer dans la base de données";
+//        //return validation;
+//        return user;
+//    }
+
+
 
     public String register(UserRegistrationDto registrationDto) {
-        // Vérifier si l'email est déjà validé
-        Optional<Validation> vOptional = validationRepository.findByEmail(registrationDto.getEmail());
-        if (vOptional.isEmpty()) {
-            throw new IllegalArgumentException("Aucune validation trouvée pour cet email");
+        try {
+            log.info("Vérification de la validation pour l'email : {}", registrationDto.getEmail());
+            Optional<Validation> vOptional = validationRepository.findByEmail(registrationDto.getEmail());
+            if (vOptional.isEmpty()) {
+                throw new IllegalArgumentException("Aucune validation trouvée pour cet email");
+            }
+
+            Validation validation = vOptional.get();
+
+            if (!validation.getActivation()) {
+                throw new IllegalArgumentException("L'activation n'est pas encore effectuée");
+            }
+
+            log.info("Vérification des mots de passe...");
+            if (!registrationDto.getPassword().equals(registrationDto.getConfirmPassword())) {
+                throw new IllegalArgumentException("Les mots de passe ne correspondent pas");
+            }
+
+            log.info("Création de l'utilisateur...");
+            User user = new User();
+            user.setLastname(registrationDto.getLastname());
+            user.setFirstname(registrationDto.getFirstname());
+            user.setPseudo(registrationDto.getPseudo());
+            user.setImageProfil(registrationDto.getImageProfil());
+            user.setEmail(registrationDto.getEmail());
+            String passwordEncrypt = passwordEncoder.encode(registrationDto.getPassword());
+            user.setPassword(passwordEncrypt);
+
+            user.setActif(true);
+            user.setLoyaltyPoints(0);
+
+            log.info("Récupération du rôle...");
+            Optional<Role> roleOptional = roleRepository.findById(1);
+            if (roleOptional.isEmpty()) {
+                throw new IllegalArgumentException("Rôle non trouvé pour l'ID spécifié");
+            }
+            user.setRole(roleOptional.get());
+
+            log.info("Sauvegarde de l'utilisateur...");
+            validationRepository.save(validation);
+            user = userRepository.save(user);
+            validation.setUser(user);
+            validationRepository.save(validation);
+
+            return "Utilisateur inscrit";
+        } catch (Exception e) {
+            log.error("Erreur lors de l'enregistrement de l'utilisateur : ", e);
+            throw e;
         }
-
-        Validation validation = vOptional.get();
-        if (!validation.getActivation()) {
-            throw new IllegalArgumentException("L'activation n'est pas encore effectuée");
-        }
-
-        // Créer un utilisateur
-        User user = new User();
-        user.setLastname(registrationDto.getLastname());
-        user.setFirstname(registrationDto.getFirstname());
-        user.setPseudo(registrationDto.getPseudo());
-        user.setImageProfil(registrationDto.getImageProfil());
-        user.setEmail(registrationDto.getEmail());
-
-        // Encoder le mot de passe
-        String passwordEncrypt = passwordEncoder.encode(registrationDto.getPassword());
-        user.setPassword(passwordEncrypt);
-
-        // Récupérer le rôle
-        Optional<Role> roleOptional = roleRepository.findById(2);
-        if (roleOptional.isEmpty()) {
-            throw new IllegalArgumentException("Rôle non trouvé pour l'ID spécifié");
-        }
-        user.setRole(roleOptional.get());
-
-        // Sauvegarder l'utilisateur
-        validation.setUser(user);
-        userRepository.save(user);
-        return "L'utilisateur a bien été enregistrer dans la base de données";
     }
+
+
 
 
 

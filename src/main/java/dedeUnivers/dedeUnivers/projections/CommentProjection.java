@@ -5,5 +5,7 @@ public interface CommentProjection {
     String getComment();
     String getTitleComment();
     Integer getNote();
+    UserProjection getUser();
 }
+
 

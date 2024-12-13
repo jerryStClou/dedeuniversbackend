@@ -2,13 +2,11 @@ package dedeUnivers.dedeUnivers.securities;
 
 import java.security.Key;
 import java.time.LocalDateTime;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
+import dedeUnivers.dedeUnivers.entities.Role;
 import jakarta.transaction.Transactional;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -114,23 +112,46 @@ public class JwtService {
 //                .signWith(getSigningKey(), SignatureAlgorithm.HS512)
 //                .compact();
 //    }
-
+//
+//    public String generateJwtToken(User user) {
+//        Date now = new Date();
+//        Date expiryDate = new Date(now.getTime() + 36000000); // Token valid for 30 minutes
+//
+//        Map<String, Object> claims = new HashMap<>();
+//        claims.put("lastname", user.getLastname());
+//        claims.put("firstname", user.getFirstname());
+//
+//        return Jwts.builder()
+//                .setClaims(claims)
+//                .setSubject(user.getEmail())  // Assurez-vous que vous utilisez la bonne valeur pour le sujet
+//                .setIssuedAt(now)
+//                .setExpiration(expiryDate) // L'expiration est déjà définie ici
+//                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+//                .compact();
+//    }
     public String generateJwtToken(User user) {
         Date now = new Date();
-        Date expiryDate = new Date(now.getTime() + 36000000); // Token valid for 30 minutes
+        Date expiryDate = new Date(now.getTime() + 36000000); // Token valide pendant 30 minutes
 
+        // Récupérer le type de rôle de l'utilisateur (RoleType)
+        Role role = user.getRole();  // Récupère l'objet Role associé à l'utilisateur
+        String roleName = role != null ? "ROLE_" + role.getRoleType().name() : "ROLE_CLIENT";  // Par défaut "ROLE_CLIENT"
+
+        // Ajouter le rôle dans les claims
         Map<String, Object> claims = new HashMap<>();
         claims.put("lastname", user.getLastname());
         claims.put("firstname", user.getFirstname());
+        claims.put("role", roleName);  // Ajoutez le rôle avec le préfixe "ROLE_"
 
         return Jwts.builder()
                 .setClaims(claims)
                 .setSubject(user.getEmail())  // Assurez-vous que vous utilisez la bonne valeur pour le sujet
                 .setIssuedAt(now)
-                .setExpiration(expiryDate) // L'expiration est déjà définie ici
+                .setExpiration(expiryDate)  // L'expiration est déjà définie ici
                 .signWith(getSigningKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
+
 
 
     // Get Jwt by token

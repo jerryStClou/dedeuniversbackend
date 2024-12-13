@@ -63,16 +63,28 @@ public class MaterialService {
     }
 
     public void remove(Integer id) {
+        List<ProductOption> productOptions = productOptionRepository.findByMaterial_Id(id);
+        // Supprimer chaque ProductOption individuellement
+        for (ProductOption productOption : productOptions) {
+            productOption.setMaterial(null);
+        }
         materialRepository.deleteById(id);
     }
 
 
-    public Material addMaterial(Material material, Integer idProductOption){
-        ProductOption productOption = productOptionRepository.findById(idProductOption).get();
+    public Material addMaterial(Material material, Integer idProduct){
+        //ProductOption productOption = productOptionRepository.findById(idProductOption).get();
         Material material1 = materialRepository.save(material);
-        productOption.setMaterial(material1);
-        productOptionRepository.save(productOption);
+        List<ProductOption> productOptions = productOptionRepository.findByProductId(idProduct);
+        for (ProductOption productOption:productOptions){
+            productOption.setMaterial(material1);
+            productOptionRepository.save(productOption);
+        }
         return material1;
+    }
+
+    public List<Material> getAllMaterialByProductId(Integer idProduct){
+        return productOptionRepository.findMaterialsByProductId(idProduct);
     }
 
 }

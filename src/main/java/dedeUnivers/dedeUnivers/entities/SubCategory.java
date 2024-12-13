@@ -22,14 +22,14 @@ public class SubCategory {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
 
-    @Column(name = "name_subCategory", nullable = false, length = 100, unique = true)
+    @Column(name = "name_subCategory", nullable = false, length = 100)
     @Size(min = 2, max = 60)
     @NotNull
     private String nameSubCategory;
 
 
     @Column(name = "image_subCategory", nullable = true, length = 255, unique = false)
-    @Size(min = 2, max = 255)
+    @Size(min = 0, max = 255)
     private String imageSubCategory;
 
 

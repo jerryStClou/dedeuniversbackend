@@ -9,7 +9,8 @@ import dedeUnivers.dedeUnivers.repositories.ColorRepository;
 import dedeUnivers.dedeUnivers.repositories.ProductOptionRepository;
 import dedeUnivers.dedeUnivers.repositories.ProductRepository;
 
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class ColorService {
@@ -41,14 +42,54 @@ public class ColorService {
 
 
     public void remove(Integer id) {
+        List<ProductOption> productOptions = productOptionRepository.findByColor_Id(id);
+        // Supprimer chaque ProductOption individuellement
+        for (ProductOption productOption : productOptions) {
+            productOption.setColor(null);
+        }
+
         colorRepository.deleteById(id);
     }
 
-    public Color addColor(Color color, Integer idProductOption){
-        ProductOption productOption = productOptionRepository.findById(idProductOption).get();
+
+    public Color addColor(Color color, Integer idProduct){
+       // ProductOption productOption = productOptionRepository.findById(idProduct).get();
+        List<ProductOption> productOptions = productOptionRepository.findByProductId(idProduct);
+
         Color color1 = colorRepository.save(color);
-        productOption.setColor(color1);
-        productOptionRepository.save(productOption);
+        for (ProductOption productOption:productOptions){
+            productOption.setColor(color1);
+            productOptionRepository.save(productOption);
+        }
+
         return color1;
     }
+
+    public List<Color> getAllColorByProductId(Integer idProduct){
+        //List<Color> colors = productOptionRepository.findColorsByProductId(idProduct);
+        //return colors;
+
+        // Récupérer le produit par son id
+        Optional<Product> productOptional = productRepository.findById(idProduct);
+
+        if (productOptional.isPresent()) {
+            Product product = productOptional.get();
+
+            // Récupérer les ProductOption associées au produit
+            Set<ProductOption> productOptions = product.getProductOptions();
+
+            // Extraire les Materials de chaque ProductOption
+            List<Color> colors = productOptions.stream()
+                    .map(ProductOption::getColor) // Récupérer le Material de chaque ProductOption
+                    .filter(Objects::nonNull) // Filtrer les ProductOption sans Material
+                    .collect(Collectors.toList());
+
+            return colors;
+        }
+
+        // Si le produit n'existe pas, retourner une liste vide ou lever une exception
+        return Collections.emptyList();
+
+    }
+
 }

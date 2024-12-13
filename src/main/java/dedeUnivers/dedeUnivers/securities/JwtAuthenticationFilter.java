@@ -48,11 +48,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private String extractToken(HttpServletRequest request) {
-        String header = request.getHeader(HttpHeaders.AUTHORIZATION);
-        if (header != null && header.startsWith("Bearer ")) {
-            return header.substring(7);  // Extraire la partie du token "Bearer <token>"
+        // On va maintenant récupérer le token depuis un cookie
+        Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (Cookie cookie : cookies) {
+                if ("JWT".equals(cookie.getName())) {
+                    return cookie.getValue();  // Retourner le JWT du cookie
+                }
+            }
         }
-        return null;
+        return null;  // Retourne null si aucun cookie JWT n'est trouvé
     }
-
 }

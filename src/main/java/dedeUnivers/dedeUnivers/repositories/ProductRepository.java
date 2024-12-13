@@ -31,14 +31,16 @@ public interface ProductRepository  extends JpaRepository<Product, Integer> {
     Set<Product> findBySubCategory_NameSubCategoryWithImages(@Param("nameSubCategory") String nameSubCategory);
 
 
+    @Query("SELECT p FROM Product p JOIN FETCH p.productImages WHERE p.subCategory.id = :subCategoryId")
+    List<ProductProjection> findBySubCategoryId(Integer subCategoryId);
+
+
     @Query("SELECT p FROM Product p LEFT JOIN FETCH p.productImages WHERE p.subCategory.id = :subCategoryId")
     Set<Product> findBySubCategoryIdWithImages(@Param("subCategoryId") Integer subCategoryId);
 
 
     // List<Product> findBySubCategoryId(Integer subCategoryId);
 
-    @Query("SELECT p FROM Product p JOIN FETCH p.productImages WHERE p.subCategory.id = :subCategoryId")
-    List<ProductProjection> findBySubCategoryId(Integer subCategoryId);
 
 
 

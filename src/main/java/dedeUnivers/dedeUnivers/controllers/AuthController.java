@@ -1,14 +1,16 @@
 package dedeUnivers.dedeUnivers.controllers;
 
 import java.security.Key;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Date;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
-import dedeUnivers.dedeUnivers.entities.Jwt;
-import dedeUnivers.dedeUnivers.entities.RefreshToken;
+import dedeUnivers.dedeUnivers.dto.*;
+import dedeUnivers.dedeUnivers.entities.*;
 import dedeUnivers.dedeUnivers.repositories.JwtRepository;
 import dedeUnivers.dedeUnivers.repositories.RefreshTokenRepository;
 import jakarta.servlet.http.Cookie;
@@ -23,11 +25,6 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 
-import dedeUnivers.dedeUnivers.dto.ChangePasswordDto;
-import dedeUnivers.dedeUnivers.dto.UserLoginDto;
-import dedeUnivers.dedeUnivers.dto.UserRegistrationDto;
-import dedeUnivers.dedeUnivers.entities.User;
-import dedeUnivers.dedeUnivers.entities.Validation;
 import dedeUnivers.dedeUnivers.securities.JwtService;
 import dedeUnivers.dedeUnivers.services.UserService;
 import org.springframework.security.core.Authentication;
@@ -55,26 +52,36 @@ public class AuthController {
     @Autowired
     RefreshTokenRepository refreshTokenRepository;
 
+
+    // Map pour stocker les tentatives de connexion par adresse IP
+    private final Map<String, LoginAttempt> ipAttempts = new ConcurrentHashMap<>();
+
+    // Configuration de la limite de tentatives (5 tentatives en 10 minutes)
+    private static final int MAX_ATTEMPTS = 5;
+    private static final long LOCK_TIME_DURATION = Duration.ofMinutes(10).toMillis(); // 10 minutes
+
+    private static final long ATTEMPT_WINDOW = Duration.ofMinutes(10).toMillis(); // 10 minutes
+
     @PostMapping("/generate/validation-code")
-    public ResponseEntity<String> generatenerValidationCode(@RequestBody String email) {
+    public ResponseEntity<String> generatenerValidationCode(@RequestBody EmailVerificationDto emailVerificationDto) {
         try {
             String validationCode = userService.generateValidationCode();
             //userService.sendValidationEmail(email, validationCode);
-            userService.saveValidationCode(validationCode,email);
-            return new ResponseEntity<>("the code has been sent to the address "+email, HttpStatus.OK);
+            userService.saveValidationCode(validationCode,emailVerificationDto.getEmail());
+            return new ResponseEntity<>("the code has been sent to the address "+emailVerificationDto.getEmail(), HttpStatus.OK);
         } catch (Exception e) {
             return new ResponseEntity<>("error while generating code", HttpStatus.BAD_REQUEST);
         }
     }
 
     @PostMapping("/activation")
-    public ResponseEntity<String> activation(@RequestBody String validationCode) {
+    public ResponseEntity<String> activation(@RequestBody ValidationCodeDto validationCodeDto) {
         try {
-            Optional<Validation> validationOpt = userService.getValidationByCode(validationCode);
+            Optional<Validation> validationOpt = userService.getValidationByCode(validationCodeDto.getCode());
 
             if (validationOpt.isPresent()) {
                 Validation validation = validationOpt.get();
-                if (validation.getValidationCode().equals(validationCode)
+                if (validation.getValidationCode().equals(validationCodeDto.getCode())
                     && LocalDateTime.now().isBefore(validation.getValidationCodeExpiry())) {
                     validation.setActivation(true);
                     userService.saveValidation(validation);
@@ -96,8 +103,8 @@ public class AuthController {
     public ResponseEntity<String> register(@RequestBody UserRegistrationDto userRegistrationDto) {
         try {
             // Essayer d'enregistrer l'utilisateur et retourner la réponse
-            String user = userService.register(userRegistrationDto);
-            return new ResponseEntity<>(user, HttpStatus.CREATED);  // 201 CREATED est plus approprié ici
+            String message = userService.register(userRegistrationDto);
+            return new ResponseEntity<>(message, HttpStatus.CREATED);  // 201 CREATED est plus approprié ici
         } catch (IllegalArgumentException e) {
             // Si une exception est lancée dans le service, on retourne BAD_REQUEST
             return new ResponseEntity<>(null, HttpStatus.BAD_REQUEST);
@@ -157,19 +164,25 @@ public class AuthController {
 
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody UserLoginDto loginDto, HttpServletResponse response) {
+    public ResponseEntity<?> login(@RequestBody UserLoginDto loginDto, HttpServletResponse response, HttpServletRequest request) {
+        String ipAddress = request.getRemoteAddr();
+        LoginAttempt loginAttempt = ipAttempts.computeIfAbsent(ipAddress, key -> new LoginAttempt());
+
+        // Vérifier si l'adresse IP est bloquée
+        if (loginAttempt.isBlocked()) {
+            long remainingTime = (loginAttempt.getBlockedUntil() - System.currentTimeMillis()) / 1000;
+            return new ResponseEntity<>("Too many login attempts. Please try again in " + remainingTime + " seconds.", HttpStatus.TOO_MANY_REQUESTS);
+        }
+
+        // Authentifier l'utilisateur
         try {
-            // Authentifier l'utilisateur
             Authentication authentication = authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(loginDto.getUsername(), loginDto.getPassword())
             );
 
-            // Si l'authentification est réussie, générer un JWT
+            // Si l'authentification réussit, générer les tokens
             Optional<User> userOptional = userService.getUserByEmail(loginDto.getUsername());
-            User user = null;
-            if(userOptional.isPresent()){
-                user = userOptional.get();
-            }
+            User user = userOptional.orElseThrow(() -> new BadCredentialsException("Invalid username or password"));
 
             Map<String, String> tokens = jwtService.generateJwtRefreshToken(user);
 
@@ -191,15 +204,27 @@ public class AuthController {
             refreshCookie.setMaxAge(7 * 24 * 60 * 60);  // Le refresh token est valide pendant 7 jours
             response.addCookie(refreshCookie);
 
-            // Retourner les tokens dans la réponse
+            // Réinitialiser le compteur de tentatives en cas de succès
+            loginAttempt.reset();
+
             return new ResponseEntity<>(tokens, HttpStatus.OK);
         } catch (BadCredentialsException e) {
-            return new ResponseEntity<>("Sa ne marche pas", HttpStatus.UNAUTHORIZED);
+            log.error("Authentication failed for user: {}", loginDto.getUsername(), e);
+
+            // Augmenter le compteur de tentatives après une tentative échouée
+            loginAttempt.incrementFailedAttempts();
+            if (loginAttempt.getFailedAttempts() >= MAX_ATTEMPTS) {
+                // Bloquer l'IP si le nombre de tentatives échouées dépasse la limite
+                loginAttempt.block();
+            }
+
+            return new ResponseEntity<>("Invalid username or password", HttpStatus.UNAUTHORIZED);
         } catch (Exception e) {
             log.error("Error during login: ", e);
-            return new ResponseEntity<>("Laisse tomber frère sa marche pas", HttpStatus.INTERNAL_SERVER_ERROR);
+            return new ResponseEntity<>("An error occurred", HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
+
 
 
 
@@ -342,5 +367,49 @@ public class AuthController {
         }
     }
 
+
+    // Classe interne pour gérer les tentatives de connexion
+    private static class LoginAttempt {
+        private int failedAttempts = 0;
+        private long lastAttemptTime = 0;
+        private long blockedUntil = 0;
+
+        // Incrémenter le nombre de tentatives échouées
+        public void incrementFailedAttempts() {
+            failedAttempts++;
+            lastAttemptTime = System.currentTimeMillis();
+        }
+
+        // Réinitialiser le compteur
+        public void reset() {
+            failedAttempts = 0;
+            lastAttemptTime = 0;
+            blockedUntil = 0;
+        }
+
+        // Vérifier si l'IP est bloquée
+        public boolean isBlocked() {
+            if (failedAttempts >= MAX_ATTEMPTS && (System.currentTimeMillis() - lastAttemptTime) < ATTEMPT_WINDOW) {
+                return true;
+            } else if (System.currentTimeMillis() > blockedUntil) {
+                reset(); // Si le temps de blocage est écoulé, réinitialiser
+                return false;
+            }
+            return false;
+        }
+
+        // Bloquer l'IP pendant un certain temps
+        public void block() {
+            blockedUntil = System.currentTimeMillis() + LOCK_TIME_DURATION; // Bloquer pour 10 minutes
+        }
+
+        public int getFailedAttempts() {
+            return failedAttempts;
+        }
+
+        public long getBlockedUntil() {
+            return blockedUntil;
+        }
+    }
 
 }

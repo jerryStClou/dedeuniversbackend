@@ -12,10 +12,6 @@ import java.util.List;
 public interface SubCategoryRepository   extends JpaRepository<SubCategory, Integer> {
 
     List<SubCategory> findByNameSubCategoryContaining(String nameSubCategory);
-//
-//    @Query("SELECT sc FROM SubCategory sc JOIN sc.categorySubCategories csc JOIN csc.category c WHERE c.nameCategory = :nameCategory")
-//    List<SubCategory> findByCategoryName(@Param("nameCategory") String nameCategory);
-
 
     List<SubCategory> findByNameSubCategoryOrderByIdAsc(String nameSubCategory);
 

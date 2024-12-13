@@ -58,7 +58,7 @@ public class User  implements UserDetails  {
     // @Column(name = "enabled")
     // private boolean enabled;
 
-    @Column(name = "loyalty_points", nullable = false)
+    @Column(name = "loyalty_points")
     private int loyaltyPoints = 0;  // Par défaut, l'utilisateur commence avec 0 points de fidélité
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
@@ -70,9 +70,6 @@ public class User  implements UserDetails  {
     @JsonIgnore
     private Set<Comment> comments;
 
-
-
-
     @OneToOne(cascade = CascadeType.ALL)
     @JoinColumn(name = "role_id", nullable = false)
     private Role role;
@@ -81,17 +78,18 @@ public class User  implements UserDetails  {
     public User() {
     }
 
-    public User(int id, String lastname, String firstname, String pseudo, String email, String password,String imageProfil
-    ) {
+    public User(int id, String lastname, String firstname, String pseudo, String imageProfil, String email, String password, boolean actif, int loyaltyPoints, Role role) {
         this.id = id;
         this.lastname = lastname;
         this.firstname = firstname;
         this.pseudo = pseudo;
+        this.imageProfil = imageProfil;
         this.email = email;
         this.password = password;
-        this.imageProfil = imageProfil;
+        this.actif = actif;
+        this.loyaltyPoints = loyaltyPoints;
+        this.role = role;
     }
-
 
     @Override
     public String getPassword() {
